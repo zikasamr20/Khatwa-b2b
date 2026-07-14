@@ -1,0 +1,77 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable, Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 1. Hotels Collection Rules
+    match /hotels/{hotelId} {
+      allow read: if true; // Public catalog access
+      allow create, update: if isValidId(hotelId) &&
+        incoming().id is string && incoming().id.size() <= 128 &&
+        incoming().nameEn is string && incoming().nameEn.size() <= 200 &&
+        incoming().nameAr is string && incoming().nameAr.size() <= 200 &&
+        incoming().destinationId is string && incoming().destinationId.size() <= 128 &&
+        incoming().stars is number && incoming().stars >= 1 && incoming().stars <= 5 &&
+        incoming().rating is number && incoming().rating >= 0 && incoming().rating <= 5 &&
+        incoming().descriptionEn is string && incoming().descriptionEn.size() <= 2000 &&
+        incoming().descriptionAr is string && incoming().descriptionAr.size() <= 2000 &&
+        incoming().basePrice is number && incoming().basePrice >= 0 &&
+        incoming().rooms is list;
+      allow delete: if isValidId(hotelId);
+    }
+
+    // 2. Destinations Collection Rules
+    match /destinations/{destinationId} {
+      allow read: if true; // Public catalog access
+      allow create, update: if isValidId(destinationId) &&
+        incoming().id is string && incoming().id.size() <= 128 &&
+        incoming().nameEn is string && incoming().nameEn.size() <= 200 &&
+        incoming().nameAr is string && incoming().nameAr.size() <= 200 &&
+        incoming().descriptionEn is string && incoming().descriptionEn.size() <= 2000 &&
+        incoming().descriptionAr is string && incoming().descriptionAr.size() <= 2000 &&
+        incoming().image is string && incoming().image.size() <= 1000;
+      allow delete: if isValidId(destinationId);
+    }
+
+    // 3. Bookings Collection Rules
+    match /bookings/{bookingId} {
+      allow read: if true; // Agents can fetch and check bookings
+      allow create, update: if isValidId(bookingId) &&
+        incoming().id is string && incoming().id.size() <= 128 &&
+        incoming().hotelId is string && incoming().hotelId.size() <= 128 &&
+        incoming().hotelNameEn is string && incoming().hotelNameEn.size() <= 200 &&
+        incoming().hotelNameAr is string && incoming().hotelNameAr.size() <= 200 &&
+        incoming().roomTypeId is string && incoming().roomTypeId.size() <= 128 &&
+        incoming().roomTypeNameEn is string && incoming().roomTypeNameEn.size() <= 200 &&
+        incoming().roomTypeNameAr is string && incoming().roomTypeNameAr.size() <= 200 &&
+        incoming().agentCompany is string && incoming().agentCompany.size() <= 200 &&
+        incoming().agentName is string && incoming().agentName.size() <= 200 &&
+        incoming().agentEmail is string && incoming().agentEmail.size() <= 200 &&
+        incoming().checkIn is string && incoming().checkIn.size() <= 20 &&
+        incoming().checkOut is string && incoming().checkOut.size() <= 20 &&
+        incoming().totalPrice is number && incoming().totalPrice >= 0 &&
+        incoming().status is string && (incoming().status == 'pending' || incoming().status == 'confirmed' || incoming().status == 'cancelled') &&
+        incoming().paymentStatus is string && (incoming().paymentStatus == 'unpaid' || incoming().paymentStatus == 'paid') &&
+        incoming().paymentMethod is string && (incoming().paymentMethod == 'credit_card' || incoming().paymentMethod == 'bank_transfer' || incoming().paymentMethod == 'invoice') &&
+        incoming().bookingDate is string && incoming().bookingDate.size() <= 40;
+      allow delete: if isValidId(bookingId);
+    }
+  }
+}

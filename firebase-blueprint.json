@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "hotel": {
+      "title": "Hotel",
+      "description": "Egypt hotel properties contracted for direct B2B booking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nameEn": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "destinationId": { "type": "string" },
+        "stars": { "type": "number" },
+        "rating": { "type": "number" },
+        "descriptionEn": { "type": "string" },
+        "descriptionAr": { "type": "string" },
+        "benefitsEn": { "type": "array" },
+        "benefitsAr": { "type": "array" },
+        "images": { "type": "array" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "addressEn": { "type": "string" },
+        "addressAr": { "type": "string" },
+        "basePrice": { "type": "number" },
+        "reviews": { "type": "array" },
+        "rooms": { "type": "array" }
+      },
+      "required": ["id", "nameEn", "nameAr", "destinationId", "stars", "rating", "descriptionEn", "descriptionAr", "basePrice", "rooms"]
+    },
+    "destination": {
+      "title": "Destination",
+      "description": "Egyptian tourist regions and destinations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nameEn": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "descriptionEn": { "type": "string" },
+        "descriptionAr": { "type": "string" },
+        "image": { "type": "string" }
+      },
+      "required": ["id", "nameEn", "nameAr", "descriptionEn", "descriptionAr", "image"]
+    },
+    "booking": {
+      "title": "Booking",
+      "description": "B2B agent bookings for corporate hotel rooms",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "hotelId": { "type": "string" },
+        "hotelNameEn": { "type": "string" },
+        "hotelNameAr": { "type": "string" },
+        "roomTypeId": { "type": "string" },
+        "roomTypeNameEn": { "type": "string" },
+        "roomTypeNameAr": { "type": "string" },
+        "agentCompany": { "type": "string" },
+        "agentName": { "type": "string" },
+        "agentEmail": { "type": "string" },
+        "agentPhone": { "type": "string" },
+        "companyTaxId": { "type": "string" },
+        "checkIn": { "type": "string" },
+        "checkOut": { "type": "string" },
+        "guestsCount": { "type": "number" },
+        "totalPrice": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled"] },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "paid"] },
+        "paymentMethod": { "type": "string", "enum": ["credit_card", "bank_transfer", "invoice"] },
+        "bookingDate": { "type": "string" }
+      },
+      "required": ["id", "hotelId", "hotelNameEn", "hotelNameAr", "roomTypeId", "roomTypeNameEn", "roomTypeNameAr", "agentCompany", "agentName", "agentEmail", "checkIn", "checkOut", "totalPrice", "status", "paymentStatus", "paymentMethod", "bookingDate"]
+    }
+  },
+  "firestore": {
+    "hotels": {
+      "schema": "hotel",
+      "description": "Collection of contracted hotels"
+    },
+    "destinations": {
+      "schema": "destination",
+      "description": "Collection of tourist destinations"
+    },
+    "bookings": {
+      "schema": "booking",
+      "description": "Collection of direct B2B corporate bookings"
+    }
+  }
+}

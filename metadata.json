@@ -1,0 +1,6 @@
+{
+  "name": "Khatwa B2B",
+  "description": "A comprehensive B2B Egyptian travel booking portal for agencies to book hotels with live inventory, pricing, and administrative dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
