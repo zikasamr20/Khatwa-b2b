@@ -4,7 +4,7 @@ import {
   CreditCard, Award, FileText, Send, Building2, User, Mail, Phone,
   ChevronLeft, ChevronRight, Check, Baby, Car, HelpCircle, Clock
 } from 'lucide-react';
-import { Hotel, RoomType, Booking, Language, Review } from '../types';
+import { Hotel, RoomType, Booking, Language, Review, formatPrice } from '../types';
 import { translations } from '../translations';
 import { InteractiveMap } from './InteractiveMap';
 
@@ -428,7 +428,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                   <th className="px-5 py-4 font-black">{isRtl ? 'السعة القصوى' : 'Max Occupancy'}</th>
                   <th className="px-5 py-4 font-black">{isRtl ? 'سعر العقد القياسي' : 'Standard Rate'}</th>
                   <th className="px-5 py-4 font-black text-white">{isRtl ? 'متوسط السعر للفترة' : 'Selected Avg Price'}</th>
-                  <th className="px-5 py-4 font-black text-emerald-400">{isRtl ? 'الإجمالي الكلي ($)' : 'Total Price ($)'}</th>
+                  <th className="px-5 py-4 font-black text-emerald-400">{isRtl ? 'الإجمالي الكلي (ج.م)' : 'Total Price (EGP)'}</th>
                   <th className="px-5 py-4 font-black">{isRtl ? 'المقاعد المتاحة فورا' : 'Instant Allotment'}</th>
                 </tr>
               </thead>
@@ -459,7 +459,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                         </div>
                       </td>
                       <td className="px-5 py-4.5 font-mono text-slate-400">
-                        ${room.pricePerNight} / {isRtl ? 'ليلة' : 'night'}
+                        {formatPrice(room.pricePerNight, lang)} / {isRtl ? 'ليلة' : 'night'}
                       </td>
                       <td className="px-5 py-4.5">
                         {pricing.isBlocked ? (
@@ -468,7 +468,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                           </span>
                         ) : (
                           <span className="font-mono text-amber-300 font-extrabold">
-                            ${pricing.avg} / {isRtl ? 'ليلة' : 'night'}
+                            {formatPrice(pricing.avg, lang)} / {isRtl ? 'ليلة' : 'night'}
                           </span>
                         )}
                       </td>
@@ -477,7 +477,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                           <span className="text-slate-600">—</span>
                         ) : (
                           <span className="text-emerald-400 font-black text-sm bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 rounded">
-                            ${pricing.total}
+                            {formatPrice(pricing.total, lang)}
                           </span>
                         )}
                       </td>
@@ -592,7 +592,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                   <thead className="bg-slate-100 border-b border-slate-200 font-bold text-[10px] text-slate-500 font-mono uppercase">
                     <tr>
                       <th className="px-4 py-2 text-left pl-5">{isRtl ? 'خط السير / نقطة الانطلاق' : 'Route / Starting Point'}</th>
-                      <th className="px-4 py-2 text-right pr-5">{isRtl ? 'السعر الصافي ($)' : 'Wholesale Net Rate ($)'}</th>
+                      <th className="px-4 py-2 text-right pr-5">{isRtl ? 'السعر الصافي (ج.م)' : 'Wholesale Net Rate (EGP)'}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-150 font-semibold">
@@ -603,7 +603,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                             {isRtl ? tr.fromAr : tr.fromEn}
                           </td>
                           <td className="px-4 py-2.5 text-right pr-5 font-mono font-black text-amber-700">
-                            ${tr.price}
+                            {formatPrice(tr.price, lang)}
                           </td>
                         </tr>
                       ))
@@ -615,7 +615,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                             {isRtl ? 'مطار القاهرة الدولي (سيارة خاصة)' : 'Cairo International Airport (Private Car)'}
                           </td>
                           <td className="px-4 py-2.5 text-right pr-5 font-mono font-black text-amber-700">
-                            $35
+                            {formatPrice(35, lang)}
                           </td>
                         </tr>
                         <tr className="hover:bg-white/40 transition-colors">
@@ -623,7 +623,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                             {isRtl ? 'مطار الغردقة الدولي (سيارة ليموزين)' : 'Hurghada Airport (VIP Limousine)'}
                           </td>
                           <td className="px-4 py-2.5 text-right pr-5 font-mono font-black text-amber-700">
-                            $45
+                            {formatPrice(45, lang)}
                           </td>
                         </tr>
                         <tr className="hover:bg-white/40 transition-colors">
@@ -631,7 +631,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                             {isRtl ? 'مطار شرم الشيخ (حافلة صغيرة للمجموعات)' : 'Sharm El Sheikh Airport (Mini-Van Group)'}
                           </td>
                           <td className="px-4 py-2.5 text-right pr-5 font-mono font-black text-amber-700">
-                            $60
+                            {formatPrice(60, lang)}
                           </td>
                         </tr>
                       </>
@@ -669,7 +669,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                   <thead className="bg-slate-100 border-b border-slate-200 font-bold text-[10px] text-slate-500 font-mono uppercase">
                     <tr>
                       <th className="px-4 py-2 text-left pl-5">{isRtl ? 'نوع الترقية / الإضافة' : 'Supplement / Upgrade Option'}</th>
-                      <th className="px-4 py-2 text-right pr-5">{isRtl ? 'السعر الصافي ($)' : 'Wholesale Net Rate ($)'}</th>
+                      <th className="px-4 py-2 text-right pr-5">{isRtl ? 'السعر الصافي (ج.م)' : 'Wholesale Net Rate (EGP)'}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-150 font-semibold">
@@ -680,7 +680,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                             {isRtl ? sp.nameAr : sp.nameEn}
                           </td>
                           <td className="px-4 py-2.5 text-right pr-5 font-mono font-black text-amber-700">
-                            ${sp.price}
+                            {formatPrice(sp.price, lang)}
                           </td>
                         </tr>
                       ))
@@ -868,14 +868,6 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                     <span className="text-amber-650 font-black">PENDING REVIEW / معلق</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-450">AGENCY:</span>
-                    <span className="text-slate-900 font-bold">{bookingSuccessData.agentCompany}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-450">TAX ID/CR:</span>
-                    <span className="text-slate-800">{bookingSuccessData.companyTaxId}</span>
-                  </div>
-                  <div className="flex justify-between">
                     <span className="text-slate-450">HOTEL:</span>
                     <span className="text-slate-800">{bookingSuccessData.hotelNameEn}</span>
                   </div>
@@ -906,7 +898,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                       {bookingSuccessData.hasExtraBed && (
                         <div className="flex justify-between">
                           <span className="text-slate-450">EXTRA BED:</span>
-                          <span className="text-amber-600 font-bold">YES (+$25/NIGHT)</span>
+                          <span className="text-amber-600 font-bold">YES (+{formatPrice(25, lang)}/NIGHT)</span>
                         </div>
                       )}
                     </>
@@ -914,16 +906,53 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                   {bookingSuccessData.transferId && (
                     <div className="flex justify-between">
                       <span className="text-slate-450">TRANSFER:</span>
-                      <span className="text-slate-800 truncate max-w-[220px]" title={bookingSuccessData.transferNameEn}>{bookingSuccessData.transferNameEn} (+${bookingSuccessData.transferPrice})</span>
+                      <span className="text-slate-800 truncate max-w-[220px]" title={bookingSuccessData.transferNameEn}>{bookingSuccessData.transferNameEn} (+{formatPrice(bookingSuccessData.transferPrice, lang)})</span>
                     </div>
                   )}
                   <div className="flex justify-between">
                     <span className="text-slate-450">PAYMENT METHOD:</span>
                     <span className="text-amber-600 font-bold uppercase">{bookingSuccessData.paymentMethod.replace('_', ' ')}</span>
                   </div>
+
+                  {/* Child Policies of this Hotel */}
+                  <div className="border-t border-dashed border-slate-200 pt-3 mt-3">
+                    <div className="text-slate-450 font-black text-[10px] uppercase tracking-wider mb-1">
+                      {isRtl ? 'سياسات إقامة الأطفال للفندق:' : 'Child Accommodation Policies:'}
+                    </div>
+                    <div className="text-[10px] text-slate-600 leading-relaxed font-semibold font-sans">
+                      {isRtl ? (
+                        hotel.childPolicyAr || 'الأطفال أقل من ٦ سنوات مجاناً. من ٦ إلى ١١.٩٩ سنة خصم ٥٠٪.'
+                      ) : (
+                        hotel.childPolicyEn || 'Children under 6 stay free. Children 6-12 receive 50% discount.'
+                      )}
+                    </div>
+                  </div>
+
+                  {/* All Contracted Airport/Ground Transfers & Rates */}
+                  <div className="border-t border-dashed border-slate-200 pt-3 mt-3">
+                    <div className="text-slate-450 font-black text-[10px] uppercase tracking-wider mb-1.5">
+                      {isRtl ? 'أسعار خدمات النقل والمواصلات المتاحة للفندق:' : 'Available Transfer Options & Contracted Rates:'}
+                    </div>
+                    <div className="space-y-1 font-mono text-[10px]">
+                      {(hotel.transfers && hotel.transfers.length > 0 ? hotel.transfers : [
+                        { id: 'trans-1', fromEn: 'Cairo International Airport (Private Car)', fromAr: 'مطار القاهرة الدولي (سيارة خاصة)', price: 35 },
+                        { id: 'trans-2', fromEn: 'Hurghada Airport (VIP Limousine)', fromAr: 'مطار الغردقة الدولي (سيارة ليموزين)', price: 45 },
+                        { id: 'trans-3', fromEn: 'Sharm El Sheikh Airport (Mini-Van Group)', fromAr: 'مطار شرم الشيخ (حافلة صغيرة للمجموعات)', price: 60 }
+                      ]).map((tr) => {
+                        const trPrice = tr.price !== undefined ? tr.price : ((tr as any).pricePerPerson !== undefined ? (tr as any).pricePerPerson : 0);
+                        return (
+                          <div key={tr.id} className="flex justify-between text-slate-600">
+                            <span className="truncate max-w-[240px] font-sans">{isRtl ? tr.fromAr : tr.fromEn}</span>
+                            <span className="font-bold text-amber-700 font-mono">{formatPrice(trPrice, lang)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="border-t border-dashed border-slate-200 pt-3 mt-3 flex justify-between text-base font-bold text-slate-900">
                     <span>TOTAL AMOUNT:</span>
-                    <span className="text-emerald-600 font-black">${bookingSuccessData.totalPrice}</span>
+                    <span className="text-emerald-600 font-black">{formatPrice(bookingSuccessData.totalPrice, lang)}</span>
                   </div>
                 </div>
 
@@ -1129,7 +1158,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                         />
                         <div className="text-xs">
                           <span className="font-bold text-slate-950 block">{lang === 'ar' ? 'طلب سرير إضافي للأطفال' : 'Request Extra Child Bed'}</span>
-                          <span className="text-slate-500 block text-[10px] mt-0.5">+ $25 / {lang === 'ar' ? 'الليلة' : 'night'}</span>
+                          <span className="text-slate-500 block text-[10px] mt-0.5">+ {formatPrice(25, lang)} / {lang === 'ar' ? 'الليلة' : 'night'}</span>
                         </div>
                       </label>
                     </div>
@@ -1145,7 +1174,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                         <option value="none">{lang === 'ar' ? 'بدون خدمة نقل' : 'No Transfer Service'}</option>
                         {hotelTransfers.map((trans) => (
                           <option key={trans.id} value={trans.id}>
-                            {lang === 'ar' ? trans.fromAr : trans.fromEn} (+ ${trans.price})
+                            {lang === 'ar' ? trans.fromAr : trans.fromEn} (+ {formatPrice(trans.price, lang)})
                           </option>
                         ))}
                       </select>
@@ -1259,7 +1288,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex justify-between items-center text-sm">
                   <div>
                     <span className="text-slate-500 text-xs block">
-                      ${selectedRoom.pricePerNight} x {nights || 1} {lang === 'ar' ? 'ليالي' : 'nights'}
+                      {formatPrice(selectedRoom.pricePerNight, lang)} x {nights || 1} {lang === 'ar' ? 'ليالي' : 'nights'}
                     </span>
                     <span className="text-slate-700 text-xs block mt-0.5">
                       {lang === 'ar' ? 'حصص مؤكدة مباشرة' : 'Direct Allotment Confirmed'}
@@ -1267,7 +1296,7 @@ export const HotelDetail: React.FC<HotelDetailProps> = ({
                   </div>
                   <div className="text-right">
                     <span className="text-slate-450 text-[10px] block font-mono uppercase tracking-wider">{t.totalPrice}</span>
-                    <span className="text-xl font-black text-emerald-600 font-mono">${totalPrice}</span>
+                    <span className="text-xl font-black text-emerald-600 font-mono">{formatPrice(totalPrice, lang)}</span>
                   </div>
                 </div>
 

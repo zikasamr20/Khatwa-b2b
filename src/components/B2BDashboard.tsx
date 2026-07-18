@@ -2,17 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { 
   Building2, Calendar, Check, X, ShieldAlert, CreditCard, DollarSign,
   Briefcase, TrendingUp, Hotel as HotelIcon, Plus, FileText, ChevronRight,
-  MapPin, RefreshCw, Trash2, Edit, LogOut
+  MapPin, RefreshCw, Trash2, Edit, LogOut, Users, ShieldCheck, Lock, Unlock, UserPlus, Key
 } from 'lucide-react';
-import { Booking, Hotel, Destination, Language, RoomType, Review, HotelSchedule, Supplement, Transfer } from '../types';
+import { Booking, Hotel, Destination, Language, RoomType, Review, HotelSchedule, Supplement, Transfer, formatPrice, PortalUser } from '../types';
 import { translations } from '../translations';
 import { InteractiveMap } from './InteractiveMap';
+import { collection, getDocs, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 interface B2BDashboardProps {
   bookings: Booking[];
   hotels: Hotel[];
   destinations: Destination[];
   lang: Language;
+  loggedInUser?: PortalUser | null;
   onUpdateBookingStatus: (bookingId: string, status: 'confirmed' | 'cancelled', paymentStatus: 'paid' | 'unpaid') => void;
   onAddHotel: (hotel: Hotel) => void;
   onAddDestination: (destination: Destination) => void;
@@ -28,6 +31,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
   hotels,
   destinations,
   lang,
+  loggedInUser,
   onUpdateBookingStatus,
   onAddHotel,
   onAddDestination,
@@ -38,7 +42,18 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
   onClearDemoData,
 }) => {
   const t = translations[lang];
-  const [activeTab, setActiveTab] = useState<'stats' | 'bookings' | 'content' | 'schedule'>('stats');
+  const [activeTab, setActiveTab] = useState<'content' | 'schedule' | 'users'>('content');
+
+  const canManageBookings = !loggedInUser || loggedInUser.role === 'admin' || loggedInUser.role === 'manager';
+  const canManageContent = !loggedInUser || loggedInUser.role === 'admin' || loggedInUser.role === 'editor';
+
+  // User Management States
+  const [portalUsers, setPortalUsers] = useState<PortalUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<'admin' | 'manager' | 'editor' | 'viewer'>('viewer');
 
   const [editHotelData, setEditHotelData] = useState<Hotel | null>(null);
 
@@ -64,6 +79,74 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
       setNewHotelDestId(destinations[0].id);
     }
   }, [destinations, newHotelDestId]);
+
+  const isRtl = lang === 'ar';
+
+  const fetchUsers = async () => {
+    if (loggedInUser?.role !== 'admin') return;
+    setUsersLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      const list = snap.docs.map(doc => doc.data() as PortalUser);
+      setPortalUsers(list);
+    } catch (err) {
+      console.error("Error fetching users:", err);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'users') {
+      fetchUsers();
+    }
+  }, [activeTab]);
+
+  const handleDeleteUser = async (userEmail: string) => {
+    if (userEmail === loggedInUser?.email) {
+      alert(isRtl ? "لا يمكنك حذف حسابك الحالي!" : "You cannot delete your own account!");
+      return;
+    }
+    if (!window.confirm(isRtl ? `هل أنت متأكد من رغبتك في حذف المستخدم ${userEmail}؟` : `Are you sure you want to delete user ${userEmail}?`)) {
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'users', userEmail.toLowerCase().trim()));
+      alert(isRtl ? "تم حذف المستخدم بنجاح!" : "User deleted successfully!");
+      fetchUsers();
+    } catch (err) {
+      console.error(err);
+      alert(isRtl ? "حدث خطأ أثناء الحذف!" : "Error deleting user!");
+    }
+  };
+
+  const handleAddUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const emailLower = newEmail.toLowerCase().trim();
+    if (!emailLower || !newPassword) {
+      alert(isRtl ? "يرجى ملء جميع الحقول!" : "Please fill in all fields!");
+      return;
+    }
+    try {
+      await setDoc(doc(db, 'users', emailLower), {
+        id: emailLower,
+        email: emailLower,
+        password: newPassword,
+        role: newRole,
+        isTemporaryPassword: true,
+        createdAt: new Date().toISOString().split('T')[0]
+      });
+      alert(isRtl ? "تمت إضافة المستخدم بنجاح بالرقم السري المؤقت!" : "User added successfully with temporary password!");
+      setShowAddUserModal(false);
+      setNewEmail('');
+      setNewPassword('');
+      setNewRole('viewer');
+      fetchUsers();
+    } catch (err) {
+      console.error(err);
+      alert(isRtl ? "حدث خطأ أثناء إضافة المستخدم!" : "Error adding user!");
+    }
+  };
   const [newHotelStars, setNewHotelStars] = useState(5);
   const [newHotelDescEn, setNewHotelDescEn] = useState('');
   const [newHotelDescAr, setNewHotelDescAr] = useState('');
@@ -282,8 +365,6 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
 
   const pendingApprovalsCount = bookings.filter(b => b.status === 'pending').length;
 
-  const isRtl = lang === 'ar';
-
   const handleCreateHotel = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newHotelNameEn || !newHotelNameAr) {
@@ -440,6 +521,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
   };
 
   const scheduleDates = getNext10Days();
+  const invoiceHotel = selectedInvoice ? hotels.find(h => h.id === selectedInvoice.hotelId) : null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 animate-fadeIn" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -457,40 +539,25 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
         </div>
 
         {/* Dynamic CTAs */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowAddHotelModal(true)}
-            className="bg-amber-500 text-slate-950 hover:bg-amber-400 font-extrabold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            {t.addHotelBtn}
-          </button>
-          <button
-            onClick={() => setShowAddDestModal(true)}
-            className="bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200 font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            {t.addDestBtn}
-          </button>
-          {onClearDemoData && (hotels.length > 0 || destinations.length > 0 || bookings.length > 0) && (
+        {canManageContent && (
+          <div className="flex gap-2">
             <button
-              onClick={() => {
-                const confirmed = window.confirm(
-                  isRtl 
-                    ? 'هل أنت متأكد من رغبتك في حذف جميع البيانات الوهمية؟ لا يمكن التراجع عن هذا الإجراء وسيتم مسح كافة الفنادق والوجهات والحجوزات المسجلة حالياً لبدء قاعدة بيانات جديدة حقيقية.'
-                    : 'Are you sure you want to delete all demo/mock data? This action is irreversible and will delete all hotels, destinations, and bookings to start a clean database with real data.'
-                );
-                if (confirmed) {
-                  onClearDemoData();
-                }
-              }}
-              className="bg-red-50 text-red-750 border border-red-200 hover:bg-red-100 font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
-              title={isRtl ? 'مسح كافة البيانات الوهمية للبدء في وضع بيانات حقيقية' : 'Delete all demo/mock data to start with clean real data'}
+              onClick={() => setShowAddHotelModal(true)}
+              className="bg-amber-500 text-slate-950 hover:bg-amber-400 font-extrabold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
             >
-              <Trash2 className="w-4 h-4" />
-              {isRtl ? 'مسح البيانات الوهمية' : 'Clear Demo Data'}
+              <Plus className="w-4 h-4" />
+              {t.addHotelBtn}
             </button>
-          )}
+            <button
+              onClick={() => setShowAddDestModal(true)}
+              className="bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200 font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              {t.addDestBtn}
+            </button>
+          </div>
+        )}
+        <div className="flex gap-2">
           <button
             onClick={onLogout}
             className="bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
@@ -504,10 +571,9 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
       {/* Tabs */}
       <div className="flex border-b border-slate-200 mb-8 overflow-x-auto pb-1 gap-1">
         {[
-          { id: 'stats', label: t.dashStats, icon: TrendingUp },
-          { id: 'bookings', label: t.dashBookings, icon: FileText },
           { id: 'content', label: t.dashContent, icon: HotelIcon },
-          { id: 'schedule', label: t.dashSchedule, icon: Calendar }
+          { id: 'schedule', label: t.dashSchedule, icon: Calendar },
+          ...(loggedInUser?.role === 'admin' ? [{ id: 'users', label: isRtl ? 'إدارة المستخدمين' : 'User Management', icon: Users }] : [])
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -523,270 +589,10 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
             >
               <Icon className="w-4 h-4" />
               {tab.label}
-              {tab.id === 'bookings' && pendingApprovalsCount > 0 && (
-                <span className="bg-amber-500 text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded-full animate-pulse">
-                  {pendingApprovalsCount}
-                </span>
-              )}
             </button>
           );
         })}
       </div>
-
-      {/* TAB 1: CORPORATE ANALYTICS */}
-      {activeTab === 'stats' && (
-        <div className="space-y-8 animate-fadeIn">
-          {/* STATS HERO GRID */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Total Bookings */}
-            <div className="bg-white border border-slate-200 p-6 rounded-2xl relative overflow-hidden shadow-sm">
-              <div className="absolute right-4 top-4 text-amber-500/10">
-                <FileText className="w-16 h-16 stroke-1" />
-              </div>
-              <span className="text-slate-500 text-xs font-mono tracking-wider uppercase">{t.totalBookings}</span>
-              <h3 className="text-4xl font-black text-slate-900 mt-2 font-mono">{bookings.length}</h3>
-              <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                <span className="text-emerald-600 font-bold">↑ 100%</span>
-                <span>direct contracted allotments</span>
-              </p>
-            </div>
-
-            {/* Wholesale Revenue */}
-            <div className="bg-white border border-slate-200 p-6 rounded-2xl relative overflow-hidden shadow-sm">
-              <div className="absolute right-4 top-4 text-emerald-500/10">
-                <DollarSign className="w-16 h-16 stroke-1" />
-              </div>
-              <span className="text-slate-500 text-xs font-mono tracking-wider uppercase">{t.totalRevenue}</span>
-              <h3 className="text-4xl font-black text-emerald-600 mt-2 font-mono">${totalWholesaleRevenue.toLocaleString()}</h3>
-              <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                <span className="text-emerald-650 font-bold">↑ 12%</span>
-                <span>commission optimized</span>
-              </p>
-            </div>
-
-            {/* Avg Contract Value */}
-            <div className="bg-white border border-slate-200 p-6 rounded-2xl relative overflow-hidden shadow-sm">
-              <div className="absolute right-4 top-4 text-sky-500/10">
-                <Briefcase className="w-16 h-16 stroke-1" />
-              </div>
-              <span className="text-slate-500 text-xs font-mono tracking-wider uppercase">{t.averageBooking}</span>
-              <h3 className="text-4xl font-black text-slate-900 mt-2 font-mono">${averageContractValue.toLocaleString()}</h3>
-              <p className="text-xs text-slate-500 mt-1">Multi-room group itineraries</p>
-            </div>
-
-            {/* Pending Approvals */}
-            <div className="bg-white border border-slate-200 p-6 rounded-2xl relative overflow-hidden shadow-sm">
-              <div className="absolute right-4 top-4 text-rose-500/10">
-                <ShieldAlert className="w-16 h-16 stroke-1" />
-              </div>
-              <span className="text-slate-500 text-xs font-mono tracking-wider uppercase">{t.pendingBookings}</span>
-              <h3 className={`text-4xl font-black mt-2 font-mono ${pendingApprovalsCount > 0 ? 'text-amber-600 animate-pulse' : 'text-slate-400'}`}>
-                {pendingApprovalsCount}
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">B2B client bank/invoice review</p>
-            </div>
-          </div>
-
-          {/* SECONDARY INFO GRAPHIC */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Top Destinations Chart */}
-            <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-              <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <TrendingUp className="text-amber-600 w-4 h-4" />
-                {isRtl ? 'حجم الحجوزات حسب الوجهات السياحية' : 'Wholesale Distribution by Destination'}
-              </h4>
-              <div className="space-y-4">
-                {destinations.map((dest) => {
-                  const destBookingsCount = bookings.filter(b => {
-                    const h = hotels.find(ht => ht.id === b.hotelId);
-                    return h?.destinationId === dest.id;
-                  }).length;
-                  const totalCount = bookings.length || 1;
-                  const ratio = (destBookingsCount / totalCount) * 100;
-
-                  return (
-                    <div key={dest.id} className="space-y-1">
-                      <div className="flex justify-between text-xs font-mono">
-                        <span className="text-slate-700 font-semibold">{isRtl ? dest.nameAr : dest.nameEn}</span>
-                        <span className="text-slate-500">{destBookingsCount} bookings ({Math.round(ratio)}%)</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
-                        <div 
-                          className="bg-amber-500 h-full rounded-full transition-all duration-1000"
-                          style={{ width: `${ratio || 4}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* B2B Invoicing Information */}
-            <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col justify-between">
-              <div>
-                <h4 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
-                  <CreditCard className="text-emerald-600 w-4 h-4" />
-                  {isRtl ? 'أنظمة الحسابات لخطوة B2B' : 'Agency Payment Methods split'}
-                </h4>
-                <p className="text-xs text-slate-650 mb-4 leading-relaxed">
-                  {isRtl ? 'تسهيلات سداد وتقسيم مرن لوكالات السفر الشريكة معنا لضمان تأكيد حصص الحجوزات.' : 'Detailed ratio of the transaction types utilized by travel agents during booking procedures.'}
-                </p>
-
-                <div className="grid grid-cols-3 gap-3 font-mono text-center">
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-500 block">CREDIT CARD</span>
-                    <span className="text-slate-900 font-bold text-sm block mt-1">
-                      {bookings.filter(b => b.paymentMethod === 'credit_card').length}
-                    </span>
-                  </div>
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-500 block">BANK TRANS.</span>
-                    <span className="text-slate-900 font-bold text-sm block mt-1">
-                      {bookings.filter(b => b.paymentMethod === 'bank_transfer').length}
-                    </span>
-                  </div>
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-500 block">CREDIT LINE</span>
-                    <span className="text-slate-900 font-bold text-sm block mt-1">
-                      {bookings.filter(b => b.paymentMethod === 'invoice').length}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl mt-4 flex items-center gap-3">
-                <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0" />
-                <span className="text-xs text-slate-700 leading-relaxed">
-                  {isRtl 
-                    ? 'يتم تعيين شروط حد الائتمان تلقائياً لكل شركة بعد مراجعة سجلها التجاري المرفق مع الحجوزات.'
-                    : 'Wholesale credit lines are refreshed on the 1st of each month. Invoices can be managed in the Reservations Tab.'
-                  }
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: RESERVATIONS MANAGER */}
-      {activeTab === 'bookings' && (
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm animate-fadeIn">
-          {/* Booking search bar */}
-          <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-3 items-center justify-between">
-            <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider font-mono">
-              {isRtl ? 'قائمة الحجوزات الحية للشركات' : 'Corporate Hotel Reservations Ledger'}
-            </h4>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 border-b border-slate-200 font-mono text-[10px] uppercase">
-                  <th className="p-4">{t.bookingId}</th>
-                  <th className="p-4">{t.agency}</th>
-                  <th className="p-4">{t.hotel}</th>
-                  <th className="p-4">{t.room}</th>
-                  <th className="p-4">{t.dates}</th>
-                  <th className="p-4 text-right">{t.totalPrice}</th>
-                  <th className="p-4 text-center">{t.status}</th>
-                  <th className="p-4 text-center">{t.payment}</th>
-                  <th className="p-4 text-center">{t.action}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {bookings.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="p-8 text-center text-slate-450">
-                      {t.noBookingsFound}
-                    </td>
-                  </tr>
-                ) : (
-                  bookings.map((booking) => (
-                    <tr key={booking.id} className="hover:bg-slate-50/50 text-slate-700">
-                      <td className="p-4 font-mono text-slate-950 font-bold">{booking.id}</td>
-                      <td className="p-4">
-                        <div className="font-semibold text-slate-800">{booking.agentCompany}</div>
-                        <div className="text-[10px] text-slate-500">{booking.agentName}</div>
-                      </td>
-                      <td className="p-4 font-medium text-slate-900">{isRtl ? booking.hotelNameAr : booking.hotelNameEn}</td>
-                      <td className="p-4 text-slate-650">{isRtl ? booking.roomTypeNameAr : booking.roomTypeNameEn}</td>
-                      <td className="p-4 font-mono text-[10px] text-slate-600">
-                        <div>{booking.checkIn}</div>
-                        <div className="text-slate-450">to {booking.checkOut}</div>
-                      </td>
-                      <td className="p-4 text-right font-bold text-slate-900 font-mono">${booking.totalPrice}</td>
-                      <td className="p-4 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          booking.status === 'confirmed' ? 'bg-emerald-50 text-emerald-750 border border-emerald-250' :
-                          booking.status === 'pending' ? 'bg-amber-50 text-amber-750 border border-amber-250' :
-                          'bg-rose-50 text-rose-750 border border-rose-250'
-                        }`}>
-                          {booking.status === 'confirmed' ? t.confirmed :
-                           booking.status === 'pending' ? t.pending : t.cancelled}
-                        </span>
-                      </td>
-                      <td className="p-4 text-center font-mono">
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                            booking.paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-750' : 'bg-rose-50 text-rose-750'
-                          }`}>
-                            {booking.paymentStatus === 'paid' ? t.paid : t.unpaid}
-                          </span>
-                          <span className="text-[8px] text-slate-500 uppercase">{booking.paymentMethod.replace('_', ' ')}</span>
-                        </div>
-                      </td>
-                      <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {/* Invoice view btn */}
-                          <button
-                            onClick={() => setSelectedInvoice(booking)}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-200 p-1 rounded-md transition-colors cursor-pointer"
-                            title="Invoice Details"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Approval / Status actions */}
-                          {booking.status === 'pending' && (
-                            <button
-                              onClick={() => onUpdateBookingStatus(booking.id, 'confirmed', 'unpaid')}
-                              className="bg-emerald-500 text-slate-950 p-1 rounded-md hover:bg-emerald-400 transition-colors cursor-pointer"
-                              title="Confirm Reservation"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          
-                          {booking.paymentStatus === 'unpaid' && booking.status !== 'cancelled' && (
-                            <button
-                              onClick={() => onUpdateBookingStatus(booking.id, booking.status, 'paid')}
-                              className="bg-amber-500 text-slate-950 p-1 rounded-md hover:bg-amber-400 transition-colors cursor-pointer"
-                              title="Mark as Paid"
-                            >
-                              <CreditCard className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-
-                          {booking.status !== 'cancelled' && (
-                            <button
-                              onClick={() => onUpdateBookingStatus(booking.id, 'cancelled', booking.paymentStatus)}
-                              className="bg-rose-50 text-rose-700 border border-rose-200 p-1 rounded-md hover:bg-rose-100 transition-colors cursor-pointer"
-                              title="Cancel Reservation"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {/* TAB 3: CONTENT MANAGER (DYNAMIC HOTELS / COUNTRIES) */}
       {activeTab === 'content' && (
@@ -1022,11 +828,11 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                     </div>
                     <div className="space-y-1 pt-3 md:pt-0 md:pl-4 rtl:md:pr-4">
                       <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">{isRtl ? 'السعر القياسي' : 'Standard Base Rate'}</span>
-                      <span className="text-base font-black text-slate-700 font-mono">${res.basePrice} / {isRtl ? 'ليلة' : 'night'}</span>
+                      <span className="text-base font-black text-slate-700 font-mono">{formatPrice(res.basePrice, lang)} / {isRtl ? 'ليلة' : 'night'}</span>
                     </div>
                     <div className="space-y-1 pt-3 md:pt-0 md:pl-4 rtl:md:pr-4">
-                      <span className="text-[10px] text-amber-900 font-extrabold block uppercase tracking-wider">{isRtl ? 'الإجمالي الكلي ($)' : 'Total Cost ($)'}</span>
-                      <span className="text-base font-black text-emerald-750 font-mono bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-100 inline-block">${res.totalPrice}</span>
+                      <span className="text-[10px] text-amber-900 font-extrabold block uppercase tracking-wider">{isRtl ? 'الإجمالي الكلي (ج.م)' : 'Total Cost (EGP)'}</span>
+                      <span className="text-base font-black text-emerald-750 font-mono bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-100 inline-block">{formatPrice(res.totalPrice, lang)}</span>
                     </div>
                   </div>
 
@@ -1039,7 +845,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                           d.isBlocked ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-slate-50 border-slate-200'
                         }`}>
                           <div className="text-[10px] font-bold text-slate-600 font-mono">{d.date}</div>
-                          <div className="text-xs font-black text-slate-900 font-mono">${d.price}</div>
+                          <div className="text-xs font-black text-slate-900 font-mono">{formatPrice(d.price, lang)}</div>
                           <div className="text-[9px] text-slate-500">
                             {d.isBlocked ? (
                               <span className="bg-rose-100 text-rose-800 px-1 py-0.2 rounded font-bold uppercase">{isRtl ? 'مغلق' : 'Blocked'}</span>
@@ -1140,7 +946,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                                         ? 'text-emerald-700 bg-emerald-50 border border-emerald-100' 
                                         : 'text-slate-500 bg-slate-50 border border-slate-150 font-medium'
                                     }`}>
-                                      ${activeSchedule?.priceOverride !== undefined ? activeSchedule.priceOverride : room.pricePerNight}
+                                      {formatPrice(activeSchedule?.priceOverride !== undefined ? activeSchedule.priceOverride : room.pricePerNight, lang)}
                                     </span>
 
                                     {/* Schedule name indicator badge */}
@@ -1270,7 +1076,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                         <th className="px-4 py-3 text-left">{isRtl ? 'نوع الغرفة' : 'Room Type'}</th>
                         <th className="px-4 py-3">{isRtl ? 'التاريخ من' : 'Valid From'}</th>
                         <th className="px-4 py-3">{isRtl ? 'التاريخ إلى' : 'Valid To'}</th>
-                        <th className="px-4 py-3">{isRtl ? 'سعر الغرفة ($)' : 'Room Price ($)'}</th>
+                        <th className="px-4 py-3">{isRtl ? 'سعر الغرفة (ج.م)' : 'Room Price (EGP)'}</th>
                         <th className="px-4 py-3">{isRtl ? 'الحصة (Allotment)' : 'Allotment'}</th>
                         <th className="px-4 py-3 text-right pr-6">{isRtl ? 'الموسم / العقد' : 'Contract Season / Classification'}</th>
                       </tr>
@@ -1299,7 +1105,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
                                   : 'bg-amber-50 text-amber-800 border border-amber-100'
                               }`}>
-                                ${rate.price}
+                                {formatPrice(rate.price, lang)}
                               </span>
                             )}
                           </td>
@@ -1322,6 +1128,219 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: USER MANAGEMENT (ADMIN ONLY) */}
+      {activeTab === 'users' && loggedInUser?.role === 'admin' && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm animate-fadeIn space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <Users className="w-5 h-5 text-amber-500" />
+                {isRtl ? 'إدارة مستخدمي وموظفي النظام' : 'System Users & Staff Management'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {isRtl 
+                  ? 'إضافة موظفين جدد بكلمات مرور مؤقتة وتحديد مستويات الصلاحيات والوصول الخاصة بكل منهم.'
+                  : 'Add new staff members with temporary passwords and define their system access privileges.'}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowAddUserModal(true)}
+              className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm hover:shadow"
+            >
+              <UserPlus className="w-4 h-4 text-amber-500" />
+              {isRtl ? 'إضافة مستخدم جديد' : 'Add New User'}
+            </button>
+          </div>
+
+          {/* User List Table */}
+          {usersLoading ? (
+            <div className="text-center py-12">
+              <RefreshCw className="w-8 h-8 text-amber-500 animate-spin mx-auto mb-2" />
+              <p className="text-xs text-slate-500">{isRtl ? 'جاري تحميل المستخدمين...' : 'Loading users...'}</p>
+            </div>
+          ) : portalUsers.length === 0 ? (
+            <div className="text-center py-12 bg-slate-50 border border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center p-6">
+              <Users className="w-10 h-10 text-slate-300 animate-bounce mb-3" />
+              <p className="text-sm font-bold text-slate-700">{isRtl ? 'لا يوجد مستخدمون مسجلون حالياً' : 'No registered users yet'}</p>
+              <p className="text-xs text-slate-500 max-w-sm mt-1 text-center leading-relaxed">
+                {isRtl 
+                  ? 'قم بإضافة أول مستخدم جديد من خلال النقر على الزر المخصص أعلاه لإنشاء حساب بالبريد الإلكتروني.'
+                  : 'Get started by creating your first team member account using the button above.'}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-xs">
+              <table className="min-w-full divide-y divide-slate-200 text-center text-xs text-slate-700">
+                <thead className="bg-slate-50 font-bold uppercase text-[10px] text-slate-500 font-mono">
+                  <tr>
+                    <th className="px-6 py-3.5 text-left pl-8">{isRtl ? 'البريد الإلكتروني' : 'Email Address'}</th>
+                    <th className="px-6 py-3.5">{isRtl ? 'تاريخ الإنشاء' : 'Date Created'}</th>
+                    <th className="px-6 py-3.5">{isRtl ? 'نوع الصلاحية' : 'Permission Role'}</th>
+                    <th className="px-6 py-3.5">{isRtl ? 'حالة كلمة المرور' : 'Password Status'}</th>
+                    <th className="px-6 py-3.5 text-right pr-8">{isRtl ? 'الإجراءات' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-center">
+                  {portalUsers.map((user) => {
+                    return (
+                      <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-4 text-left pl-8 font-bold text-slate-900">
+                          {user.email}
+                        </td>
+                        <td className="px-6 py-4 font-mono text-slate-500">
+                          {user.createdAt || '2026-07-18'}
+                        </td>
+                        <td className="px-6 py-4">
+                          {user.role === 'admin' && (
+                            <span className="bg-red-50 text-red-700 border border-red-100 px-2.5 py-1 rounded-full font-bold text-[10px]">
+                              {isRtl ? 'المدير العام / Admin' : 'Administrator'}
+                            </span>
+                          )}
+                          {user.role === 'manager' && (
+                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-full font-bold text-[10px]">
+                              {isRtl ? 'مدير الحجوزات / Manager' : 'Booking Manager'}
+                            </span>
+                          )}
+                          {user.role === 'editor' && (
+                            <span className="bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-full font-bold text-[10px]">
+                              {isRtl ? 'مدير المحتوى / Editor' : 'Content Editor'}
+                            </span>
+                          )}
+                          {user.role === 'viewer' && (
+                            <span className="bg-slate-50 text-slate-600 border border-slate-150 px-2.5 py-1 rounded-full font-bold text-[10px]">
+                              {isRtl ? 'مشاهد فقط / Viewer' : 'Read-Only Viewer'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          {user.isTemporaryPassword ? (
+                            <span className="bg-amber-100/70 text-amber-800 font-bold px-2 py-0.5 rounded-lg border border-amber-200 text-[10px]">
+                              {isRtl ? 'مؤقتة - يجب التغيير' : 'Temporary'}
+                            </span>
+                          ) : (
+                            <span className="bg-emerald-100/70 text-emerald-800 font-bold px-2 py-0.5 rounded-lg border border-emerald-200 text-[10px]">
+                              {isRtl ? 'تم التعيين والنشاط' : 'Active'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right pr-8">
+                          {user.email !== loggedInUser?.email ? (
+                            <button
+                              onClick={() => handleDeleteUser(user.email)}
+                              className="text-rose-550 hover:bg-rose-50 p-2 rounded-xl border border-transparent hover:border-rose-100 transition-all cursor-pointer inline-flex items-center gap-1 font-bold"
+                              title={isRtl ? 'حذف حساب الموظف' : 'Delete user account'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>{isRtl ? 'حذف' : 'Delete'}</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-mono italic">{isRtl ? 'حسابك الحالي' : 'Active Self'}</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* USER CREATION DIALOG MODAL */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl relative animate-fadeIn">
+            {/* Top Bar Accent */}
+            <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-500 to-amber-600"></div>
+
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between mt-1.5">
+              <h3 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-amber-500" />
+                {isRtl ? 'إضافة مستخدم وموظف جديد' : 'Add New Staff Member'}
+              </h3>
+              <button 
+                onClick={() => setShowAddUserModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer font-bold text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleAddUserSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-slate-500 text-[10px] uppercase font-mono tracking-wider mb-1.5 font-bold">
+                  {isRtl ? 'البريد الإلكتروني الجديد' : 'New User Email Address'}
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="agent@khatwa.com"
+                  className="bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-500 w-full shadow-inner"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-500 text-[10px] uppercase font-mono tracking-wider mb-1.5 font-bold">
+                  {isRtl ? 'رقم السري المؤقت' : 'Temporary Password'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="e.g. KhatwaTemp123"
+                  className="bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-500 w-full shadow-inner font-mono tracking-wide"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {isRtl 
+                    ? 'سيُجبر الموظف على تغيير كلمة المرور هذه فور تسجيل دخوله الأول للمرة الأولى.'
+                    : 'The user will be required to change this temporary password upon their first successful login.'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-slate-500 text-[10px] uppercase font-mono tracking-wider mb-1.5 font-bold">
+                  {isRtl ? 'تحديد مستوى الصلاحيات والوصول' : 'Permission & Role Assignment'}
+                </label>
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value as any)}
+                  className="bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-500 w-full cursor-pointer"
+                >
+                  <option value="viewer">{isRtl ? 'مشاهد فقط - عرض بدون تعديل (Viewer)' : 'Viewer (Read-Only)'}</option>
+                  <option value="editor">{isRtl ? 'مدير محتوى - تعديل الفنادق والغرف والأسعار (Editor)' : 'Content Editor (Hotels & Schedules)'}</option>
+                  <option value="manager">{isRtl ? 'مدير الحجوزات - تأكيد الحجوزات والحسابات (Manager)' : 'Booking Manager (Reservations)'}</option>
+                  <option value="admin">{isRtl ? 'المدير العام - صلاحية كاملة وإدارة المستخدمين (Admin)' : 'Administrator (Full System Access)'}</option>
+                </select>
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="flex gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddUserModal(false)}
+                  className="flex-1 border border-slate-200 text-slate-500 hover:bg-slate-50 py-2.5 rounded-xl text-xs transition-colors cursor-pointer font-bold"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-2.5 rounded-xl text-xs transition-colors shadow-md cursor-pointer flex items-center justify-center gap-1"
+                >
+                  <UserPlus className="w-3.5 h-3.5 text-amber-500" />
+                  {isRtl ? 'إضافة وتأكيد' : 'Add & Confirm'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1357,14 +1376,6 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                 <div className="flex justify-between">
                   <span className="text-slate-450">BOOKING DATE:</span>
                   <span className="text-slate-850">{selectedInvoice.bookingDate}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-450">AGENCY PARTNER:</span>
-                  <span className="text-slate-900 font-bold">{selectedInvoice.agentCompany}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-450">TAX ID / COMM. REG:</span>
-                  <span className="text-slate-850">{selectedInvoice.companyTaxId}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-450">AGENT NAME:</span>
@@ -1410,7 +1421,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                     {selectedInvoice.hasExtraBed && (
                       <div className="flex justify-between">
                         <span className="text-slate-450">EXTRA BED REQUESTED:</span>
-                        <span className="text-amber-600 font-bold">YES (+$25/night)</span>
+                        <span className="text-amber-600 font-bold">YES (+{formatPrice(25, lang)}/night)</span>
                       </div>
                     )}
                   </>
@@ -1418,7 +1429,43 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                 {selectedInvoice.transferId && (
                   <div className="flex justify-between">
                     <span className="text-slate-450">AIRPORT TRANSFER:</span>
-                    <span className="text-slate-850 truncate max-w-[200px]" title={selectedInvoice.transferNameEn}>{selectedInvoice.transferNameEn} (+${selectedInvoice.transferPrice})</span>
+                    <span className="text-slate-850 truncate max-w-[200px]" title={selectedInvoice.transferNameEn}>{selectedInvoice.transferNameEn} (+{formatPrice(selectedInvoice.transferPrice, lang)})</span>
+                  </div>
+                )}
+
+                {/* Child Policies of this Hotel */}
+                {invoiceHotel && (
+                  <div className="border-t border-dashed border-slate-200 pt-3 mt-3">
+                    <div className="text-slate-450 font-bold mb-1">CHILD POLICY / سياسة الأطفال:</div>
+                    <div className="text-[11px] text-slate-700 leading-relaxed font-semibold font-sans">
+                      {isRtl ? (
+                        invoiceHotel.childPolicyAr || 'الأطفال دون سن ٦ سنوات مجاناً. من ٦ إلى ١١.٩٩ سنة خصم ٥٠٪.'
+                      ) : (
+                        invoiceHotel.childPolicyEn || 'Children under 6 stay free. Children 6-12 receive 50% discount.'
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Contracted Transfers and Rates of this Hotel */}
+                {invoiceHotel && (
+                  <div className="border-t border-dashed border-slate-200 pt-3 mt-3">
+                    <div className="text-slate-450 font-bold mb-1.5">TRANSFERS RATES / أسعار الانتقالات:</div>
+                    <div className="space-y-1 font-mono text-[11px]">
+                      {(invoiceHotel.transfers && invoiceHotel.transfers.length > 0 ? invoiceHotel.transfers : [
+                        { id: 'trans-1', fromEn: 'Cairo International Airport (Private Car)', fromAr: 'مطار القاهرة الدولي (سيارة خاصة)', price: 35 },
+                        { id: 'trans-2', fromEn: 'Hurghada Airport (VIP Limousine)', fromAr: 'مطار الغردقة الدولي (سيارة ليموزين)', price: 45 },
+                        { id: 'trans-3', fromEn: 'Sharm El Sheikh Airport (Mini-Van Group)', fromAr: 'مطار شرم الشيخ (حافلة صغيرة للمجموعات)', price: 60 }
+                      ]).map((tr) => {
+                        const trPrice = tr.price !== undefined ? tr.price : ((tr as any).pricePerPerson !== undefined ? (tr as any).pricePerPerson : 0);
+                        return (
+                          <div key={tr.id} className="flex justify-between text-slate-700 font-semibold">
+                            <span className="truncate max-w-[240px] font-sans">{isRtl ? tr.fromAr : tr.fromEn}</span>
+                            <span className="font-bold text-amber-700">{formatPrice(trPrice, lang)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1447,7 +1494,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
 
               <div className="border-t-2 border-double border-slate-200 pt-3 flex justify-between text-base font-bold text-slate-900">
                 <span>TOTAL CONTRACT AMOUNT:</span>
-                <span className="text-emerald-600 font-black">${selectedInvoice.totalPrice}</span>
+                <span className="text-emerald-600 font-black">{formatPrice(selectedInvoice.totalPrice, lang)}</span>
               </div>
             </div>
 
@@ -1850,7 +1897,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                                 </button>
                               </div>
                               <div className="text-[11px] text-slate-700 font-bold">
-                                {isRtl ? 'السعر الافتراضي:' : 'Default Price:'} <span className="text-emerald-700 font-mono">${room.pricePerNight}</span>
+                                {isRtl ? 'السعر الافتراضي:' : 'Default Price:'} <span className="text-emerald-700 font-mono">{formatPrice(room.pricePerNight, lang)}</span>
                               </div>
                             </div>
                             {matchingScheds.length > 0 && (
@@ -1859,7 +1906,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                                 {matchingScheds.map((sch) => (
                                   <div key={sch.id} className="text-[10px] text-slate-600 font-mono flex justify-between">
                                     <span>{sch.startDate} - {sch.endDate}</span>
-                                    <span className="font-bold text-emerald-700">${sch.priceOverride}</span>
+                                    <span className="font-bold text-emerald-700">{formatPrice(sch.priceOverride, lang)}</span>
                                   </div>
                                 ))}
                               </div>
@@ -1897,7 +1944,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-slate-650 block mb-1">{isRtl ? 'المبلغ المطلوب للطفل في الليلة ($)' : 'Price Per Child/Night ($)'}</label>
+                    <label className="text-[10px] font-bold text-slate-650 block mb-1">{isRtl ? 'المبلغ المطلوب للطفل في الليلة (ج.م)' : 'Price Per Child/Night (EGP)'}</label>
                     <input
                       type="number"
                       value={childPolicyPrice}
@@ -1907,7 +1954,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                   </div>
                 </div>
                 <div className="text-xs bg-slate-50 rounded-xl p-3 border border-slate-200 text-slate-650 italic">
-                  {isRtl ? `السياسة الناتجة: بحد أقصى ${childPolicyCount} من الأطفال حتى سن ${childPolicyAge} سنة بسعر ${childPolicyPrice}$ للطفل في الليلة.` : `Generated Policy: Up to ${childPolicyCount} children under ${childPolicyAge} years stay for $${childPolicyPrice} per night.`}
+                  {isRtl ? `السياسة الناتجة: بحد أقصى ${childPolicyCount} من الأطفال حتى سن ${childPolicyAge} سنة بسعر ${formatPrice(childPolicyPrice, lang)} للطفل في الليلة.` : `Generated Policy: Up to ${childPolicyCount} children under ${childPolicyAge} years stay for ${formatPrice(childPolicyPrice, lang)} per night.`}
                 </div>
               </div>
 
@@ -1940,7 +1987,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] font-bold text-amber-900 block mb-0.5">{isRtl ? 'سعر الإضافة ($)' : 'Supplement Price ($)'}</label>
+                      <label className="text-[9px] font-bold text-amber-900 block mb-0.5">{isRtl ? 'سعر الإضافة (ج.م)' : 'Supplement Price (EGP)'}</label>
                       <input
                         type="number"
                         value={newSupplementPrice}
@@ -1989,7 +2036,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                               <div className="text-[9px] text-slate-400 mt-0.5">{isRtl ? 'سعر إضافي اختياري للشركات' : 'Optional contract supplement'}</div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="bg-amber-50 text-amber-700 px-2.5 py-1 text-xs rounded border border-amber-100 font-mono font-black">${sp.price}</span>
+                              <span className="bg-amber-50 text-amber-700 px-2.5 py-1 text-xs rounded border border-amber-100 font-mono font-black">{formatPrice(sp.price, lang)}</span>
                               <button
                                 type="button"
                                 onClick={() => setNewHotelSupplements(newHotelSupplements.filter(s => s.id !== sp.id))}
@@ -2207,7 +2254,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-slate-600 text-xs mb-1 font-bold">{isRtl ? 'سعر الليلة الأساسي ($)' : 'Base Contract Price ($)'}</label>
+                    <label className="block text-slate-600 text-xs mb-1 font-bold">{isRtl ? 'سعر الليلة الأساسي (ج.م)' : 'Base Contract Price (EGP)'}</label>
                     <input
                       type="number"
                       value={editHotelData.basePrice}
@@ -2351,7 +2398,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                             <span className="text-[9px] text-slate-400 font-mono block mt-0.5">{isRtl ? 'سعر للفرد الواحد' : 'Rate per person'}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 text-xs rounded border border-emerald-100 font-mono font-black">${tr.pricePerPerson || (tr as any).price || 0}</span>
+                            <span className="bg-emerald-50 text-emerald-700 px-2.5 py-1 text-xs rounded border border-emerald-100 font-mono font-black">{formatPrice(tr.pricePerPerson || (tr as any).price || 0, lang)}</span>
                             <button
                               type="button"
                               onClick={() => {
@@ -2410,7 +2457,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                         </div>
                         <div className="flex gap-2">
                           <div className="w-1/2">
-                            <label className="text-[10px] font-bold text-slate-500 block mb-0.5">{isRtl ? 'سعر الفرد ($)' : 'Price Per Person ($)'}</label>
+                            <label className="text-[10px] font-bold text-slate-500 block mb-0.5">{isRtl ? 'سعر الفرد (ج.م)' : 'Price Per Person (EGP)'}</label>
                             <input
                               type="number"
                               id="editTransPrice"
@@ -2471,7 +2518,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                             <span className="text-[10px] text-slate-400 block">{isRtl ? 'إضافة اختيارية' : 'Optional supplement'}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="bg-amber-50 text-amber-700 px-2.5 py-1 text-xs rounded border border-amber-100 font-mono font-black">${sp.price}</span>
+                            <span className="bg-amber-50 text-amber-700 px-2.5 py-1 text-xs rounded border border-amber-100 font-mono font-black">{formatPrice(sp.price, lang)}</span>
                             <button
                               type="button"
                               onClick={() => {
@@ -2509,7 +2556,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
                       </div>
                       <div className="flex gap-2">
                         <div className="w-1/2">
-                          <label className="text-[10px] font-bold text-slate-500 block mb-0.5">{isRtl ? 'السعر ($)' : 'Price ($)'}</label>
+                          <label className="text-[10px] font-bold text-slate-500 block mb-0.5">{isRtl ? 'السعر (ج.م)' : 'Price (EGP)'}</label>
                           <input
                             type="number"
                             id="editSuppPrice"
@@ -2678,7 +2725,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
 
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="text-slate-550 text-[10px] uppercase font-mono block mb-1">{isRtl ? 'سعر الليلة ($)' : 'Price Per Night ($)'}</label>
+                            <label className="text-slate-550 text-[10px] uppercase font-mono block mb-1">{isRtl ? 'سعر الليلة (ج.م)' : 'Price Per Night (EGP)'}</label>
                             <input
                               type="number"
                               value={room.pricePerNight}
@@ -2810,7 +2857,7 @@ export const B2BDashboard: React.FC<B2BDashboardProps> = ({
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[10px] font-bold text-amber-900 block mb-0.5">{isRtl ? 'السعر المعدل ($)' : 'Price Override ($)'}</label>
+                        <label className="text-[10px] font-bold text-amber-900 block mb-0.5">{isRtl ? 'السعر المعدل (ج.م)' : 'Price Override (EGP)'}</label>
                         <input
                           type="number"
                           value={schedPrice}

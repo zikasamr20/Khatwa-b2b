@@ -73,5 +73,10 @@ service cloud.firestore {
         incoming().bookingDate is string && incoming().bookingDate.size() <= 40;
       allow delete: if isValidId(bookingId);
     }
+
+    // 4. Users Collection Rules
+    match /users/{userId} {
+      allow read, write: if true;
+    }
   }
 }

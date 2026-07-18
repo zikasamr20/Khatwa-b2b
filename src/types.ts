@@ -120,3 +120,21 @@ export interface Booking {
 }
 
 export type Language = 'en' | 'ar';
+
+export interface PortalUser {
+  id: string; // lowercase email
+  email: string;
+  password: string;
+  role: 'admin' | 'manager' | 'editor' | 'viewer';
+  isTemporaryPassword?: boolean;
+  createdAt: string;
+}
+
+export function formatPrice(price: number | string | undefined, lang: Language): string {
+  if (price === undefined || price === null) return '';
+  const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+  if (isNaN(numPrice)) return String(price);
+  const formatted = numPrice.toLocaleString('en-US');
+  return lang === 'ar' ? `${formatted} ج.م` : `${formatted} EGP`;
+}
+

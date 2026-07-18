@@ -67,6 +67,20 @@
         "bookingDate": { "type": "string" }
       },
       "required": ["id", "hotelId", "hotelNameEn", "hotelNameAr", "roomTypeId", "roomTypeNameEn", "roomTypeNameAr", "agentCompany", "agentName", "agentEmail", "checkIn", "checkOut", "totalPrice", "status", "paymentStatus", "paymentMethod", "bookingDate"]
+    },
+    "portalUser": {
+      "title": "PortalUser",
+      "description": "User accounts with roles and passwords for B2BDashboard",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "manager", "editor", "viewer"] },
+        "isTemporaryPassword": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email", "password", "role", "createdAt"]
     }
   },
   "firestore": {
@@ -81,6 +95,10 @@
     "bookings": {
       "schema": "booking",
       "description": "Collection of direct B2B corporate bookings"
+    },
+    "users": {
+      "schema": "portalUser",
+      "description": "Collection of B2B portal users"
     }
   }
 }

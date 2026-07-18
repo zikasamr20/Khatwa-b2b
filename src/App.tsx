@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Building2, Globe, Search, Star, Hotel as HotelIcon, Compass, MapPin, 
   TrendingUp, Award, Calendar, Bell, ChevronRight, CheckCircle, Flame, LogIn, Users,
-  ShieldCheck, Zap, Sparkles, Receipt, Check, ArrowUpDown, X, Clock, Camera, ChevronLeft
+  ShieldCheck, Zap, Sparkles, Receipt, Check, ArrowUpDown, X, Clock, Camera, ChevronLeft, Car, RefreshCw
 } from 'lucide-react';
-import { Hotel, Destination, Booking, Language, Review } from './types';
+import { Hotel, Destination, Booking, Language, Review, PortalUser, formatPrice } from './types';
 import { translations } from './translations';
 import { HotelDetail } from './components/HotelDetail';
 import { B2BDashboard } from './components/B2BDashboard';
@@ -23,9 +23,16 @@ export default function App() {
     return (saved as any) || 'explore';
   });
 
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    return localStorage.getItem('khatwa_is_admin') === 'true';
+  const [loggedInUser, setLoggedInUser] = useState<PortalUser | null>(() => {
+    const saved = localStorage.getItem('khatwa_logged_in_user');
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
+
+  const isAdmin = loggedInUser ? true : (localStorage.getItem('khatwa_is_admin') === 'true');
 
   const [selectedHotelId, setSelectedHotelId] = useState<string | null>(null);
 
@@ -207,8 +214,8 @@ export default function App() {
       
       // Trigger alert notify as requested (تنبيهات فورية عند تأكيد كل عملية حجز جديدة)
       const alertMessage = lang === 'ar' 
-        ? `تم تأكيد حجز مباشر جديد بنجاح! رقم الحجز: ${newBooking.id} بالفندق "${newBooking.hotelNameAr}" بواسطة وكالة "${newBooking.agentCompany}" بقيمة $${newBooking.totalPrice}.`
-        : `New B2B Booking Confirmed! Ref: ${newBooking.id} at "${newBooking.hotelNameEn}" by Agency "${newBooking.agentCompany}" for $${newBooking.totalPrice}.`;
+        ? `تم تأكيد حجز مباشر جديد بنجاح! رقم الحجز: ${newBooking.id} بالفندق "${newBooking.hotelNameAr}" بواسطة وكالة "${newBooking.agentCompany}" بقيمة ${formatPrice(newBooking.totalPrice, lang)}.`
+        : `New B2B Booking Confirmed! Ref: ${newBooking.id} at "${newBooking.hotelNameEn}" by Agency "${newBooking.agentCompany}" for ${formatPrice(newBooking.totalPrice, lang)}.`;
       
       addToastNotification(alertMessage);
     } catch (err) {
@@ -510,18 +517,14 @@ export default function App() {
         {/* Dynamic routing render */}
         {activeView === 'dashboard' ? (
           /* CONTROL PANEL / DASHBOARD VIEW WITH ADMIN PASSCODE GATE */
-          !isAdmin ? (
+          !loggedInUser ? (
             <AdminPasscodeGate
               lang={lang}
-              onVerify={(passcode) => {
-                if (passcode === 'KhatwaAdmin2026') {
-                  setIsAdmin(true);
-                  localStorage.setItem('khatwa_is_admin', 'true');
-                  const msg = lang === 'ar' ? 'مرحباً بك! تم تسجيل دخول المشرف بنجاح.' : 'Welcome! Admin access granted successfully.';
-                  addToastNotification(msg);
-                } else {
-                  alert(lang === 'ar' ? 'رمز مرور المشرف غير صحيح! يرجى إعادة المحاولة.' : 'Incorrect passcode! Please try again.');
-                }
+              onLoginSuccess={(user) => {
+                setLoggedInUser(user);
+                localStorage.setItem('khatwa_logged_in_user', JSON.stringify(user));
+                const msg = lang === 'ar' ? 'مرحباً بك! تم تسجيل دخولك بنجاح.' : 'Welcome! Logged in successfully.';
+                addToastNotification(msg);
               }}
               onCancel={() => {
                 setActiveView('explore');
@@ -533,6 +536,7 @@ export default function App() {
               hotels={hotels}
               destinations={destinations}
               lang={lang}
+              loggedInUser={loggedInUser}
               onUpdateBookingStatus={handleUpdateBookingStatus}
               onAddHotel={handleAddHotel}
               onAddDestination={handleAddDestination}
@@ -541,9 +545,10 @@ export default function App() {
               onUpdateHotel={handleUpdateHotel}
               onClearDemoData={handleClearDemoData}
               onLogout={() => {
-                setIsAdmin(false);
+                setLoggedInUser(null);
+                localStorage.removeItem('khatwa_logged_in_user');
                 localStorage.removeItem('khatwa_is_admin');
-                const msg = lang === 'ar' ? 'تم تسجيل خروج المشرف بأمان.' : 'Admin logged out successfully.';
+                const msg = lang === 'ar' ? 'تم تسجيل الخروج بأمان.' : 'Logged out successfully.';
                 addToastNotification(msg);
                 setActiveView('explore');
               }}
@@ -918,15 +923,15 @@ export default function App() {
                                     </span>
                                     <div className="flex items-baseline gap-1.5">
                                       <span className="text-xl font-black text-emerald-600 font-mono">
-                                        ${hotel.basePrice}
+                                        {formatPrice(hotel.basePrice, lang)}
                                       </span>
                                       <span className="text-[10px] text-slate-400 font-bold">/ {lang === 'ar' ? 'الليلة' : 'night'}</span>
                                     </div>
                                     <span className="text-[9px] text-slate-400 line-through block font-mono">
-                                      {lang === 'ar' ? `المعدل العام: $${retailPrice}` : `Public Retail Rate: $${retailPrice}`}
+                                      {lang === 'ar' ? `المعدل العام: ${formatPrice(retailPrice, lang)}` : `Public Retail Rate: ${formatPrice(retailPrice, lang)}`}
                                     </span>
                                     <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 border border-emerald-100/50 px-1 rounded block w-fit">
-                                      {lang === 'ar' ? `وفر ${savingAmount}$ لوكالتك` : `Save $${savingAmount} for your agency`}
+                                      {lang === 'ar' ? `وفر ${formatPrice(savingAmount, lang)} لوكالتك` : `Save ${formatPrice(savingAmount, lang)} for your agency`}
                                     </span>
                                   </div>
 
@@ -975,7 +980,7 @@ export default function App() {
 
       {/* Elegant Footer */}
       <footer className="bg-white border-t border-slate-200 py-12 text-center text-xs text-slate-500 font-mono tracking-wider">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col items-center">
           <p className="text-slate-800 uppercase font-black text-sm tracking-widest mb-1">Khatwa B2B Portal</p>
           <p className="text-[10px] text-slate-500">
             <span 
@@ -984,6 +989,15 @@ export default function App() {
               title="Khatwa International"
             >©</span> 2026 {t.appName} International. Negotiated Contract Allotment System.
           </p>
+          <div className="mt-4">
+            <button
+              onClick={() => { setSelectedHotelId(null); setActiveView('dashboard'); }}
+              className="bg-slate-900 hover:bg-slate-800 text-white font-sans font-bold px-4 py-2.5 rounded-2xl text-[11px] transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 hover:shadow-md"
+            >
+              <Building2 className="w-3.5 h-3.5 text-amber-500" />
+              <span>{lang === 'ar' ? 'لوحة التحكم والشركاء' : 'Control Panel & Partner Portal'}</span>
+            </button>
+          </div>
           <div className="flex justify-center gap-4 mt-3 text-[10px] text-slate-400">
             <span>TERMS_OF_CONTRACT</span>
             <span>•</span>
@@ -1053,12 +1067,6 @@ export default function App() {
                   className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white font-mono font-bold focus:outline-none focus:border-amber-500"
                 />
               </div>
-
-              {scheduleCheckIn && scheduleCheckOut && (
-                <span className="bg-amber-500 text-slate-950 px-2.5 py-1 rounded-full font-black font-mono text-[10px] shrink-0">
-                  {Math.max(1, getDatesInRange(scheduleCheckIn, scheduleCheckOut).length)} {lang === 'ar' ? 'ليالي' : 'Nights'}
-                </span>
-              )}
             </div>
 
             {/* Modal Body / Table Scroll Area */}
@@ -1077,69 +1085,113 @@ export default function App() {
 
                 return (
                   <div className="space-y-6">
-                    {scheduleHotel.rooms.map((room) => {
-                      return (
-                        <div key={room.id} className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
-                            <div>
-                              <h4 className="font-extrabold text-white text-xs">
-                                {lang === 'ar' ? room.nameAr : room.nameEn}
-                              </h4>
-                              <p className="text-[10px] text-slate-500 max-w-xl truncate mt-0.5">
-                                {lang === 'ar' ? room.descriptionAr : room.descriptionEn}
-                              </p>
+                    {/* Rooms List */}
+                    <div className="space-y-6">
+                      {scheduleHotel.rooms.map((room) => {
+                        return (
+                          <div key={room.id} className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+                              <div>
+                                <h4 className="font-extrabold text-white text-xs">
+                                  {lang === 'ar' ? room.nameAr : room.nameEn}
+                                </h4>
+                                <p className="text-[10px] text-slate-500 max-w-xl truncate mt-0.5">
+                                  {lang === 'ar' ? room.descriptionAr : room.descriptionEn}
+                                </p>
+                              </div>
+                              <div className="bg-slate-900 text-slate-400 border border-slate-800 px-2 py-0.5 rounded-lg text-[9px] font-mono shrink-0 flex items-center gap-1">
+                                <span>{lang === 'ar' ? `الحد الأقصى: ${room.capacity} أفراد` : `Max Occupancy: ${room.capacity}`}</span>
+                              </div>
                             </div>
-                            <div className="bg-slate-900 text-slate-400 border border-slate-800 px-2 py-0.5 rounded-lg text-[9px] font-mono shrink-0 flex items-center gap-1">
-                              <span>{lang === 'ar' ? `الحد الأقصى: ${room.capacity} أفراد` : `Max Occupancy: ${room.capacity}`}</span>
+
+                            {/* Horizontal scrolling day-by-day blocks with smaller font as requested */}
+                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                              {dates.map((dateStr) => {
+                                const status = getDailyRoomStatus(scheduleHotel, room.id, dateStr);
+                                return (
+                                  <div 
+                                    key={dateStr}
+                                    className={`flex flex-col items-center justify-between text-center p-2.5 rounded-xl min-w-[76px] border transition-colors shrink-0 ${
+                                      status.isBlocked
+                                        ? 'bg-rose-950/25 border-rose-900/30 text-rose-300'
+                                        : status.available === 0
+                                        ? 'bg-slate-900/40 border-slate-800 text-slate-500'
+                                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-amber-500/30'
+                                    }`}
+                                  >
+                                    {/* Date label - small font */}
+                                    <span className="text-[9px] font-mono text-slate-400 font-bold uppercase">
+                                      {formatScheduleDate(dateStr, lang)}
+                                    </span>
+
+                                    {/* Price - small font */}
+                                    <span className="text-[11px] font-black text-amber-400 mt-1 font-mono">
+                                      {formatPrice(status.price, lang)}
+                                    </span>
+
+                                    {/* Status/Inventory - small font */}
+                                    <span className={`text-[8px] font-bold mt-1.5 px-1.5 py-0.5 rounded-md leading-none ${
+                                      status.isBlocked
+                                        ? 'bg-rose-950 text-rose-400 border border-rose-900/40'
+                                        : status.available === 0
+                                        ? 'bg-slate-850 text-slate-550'
+                                        : 'bg-emerald-950 text-emerald-400 border border-emerald-900/30'
+                                    }`}>
+                                      {status.isBlocked 
+                                        ? (lang === 'ar' ? 'مغلق' : 'Blocked') 
+                                        : status.available === 0
+                                        ? (lang === 'ar' ? 'مكتمل' : 'Full')
+                                        : (lang === 'ar' ? 'متاح' : 'Available')}
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
+                        );
+                      })}
+                    </div>
 
-                          {/* Horizontal scrolling day-by-day blocks with smaller font as requested */}
-                          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
-                            {dates.map((dateStr) => {
-                              const status = getDailyRoomStatus(scheduleHotel, room.id, dateStr);
-                              return (
-                                <div 
-                                  key={dateStr}
-                                  className={`flex flex-col items-center justify-between text-center p-2.5 rounded-xl min-w-[76px] border transition-colors shrink-0 ${
-                                    status.isBlocked
-                                      ? 'bg-rose-950/25 border-rose-900/30 text-rose-300'
-                                      : status.available === 0
-                                      ? 'bg-slate-900/40 border-slate-800 text-slate-500'
-                                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-amber-500/30'
-                                  }`}
-                                >
-                                  {/* Date label - small font */}
-                                  <span className="text-[9px] font-mono text-slate-400 font-bold uppercase">
-                                    {formatScheduleDate(dateStr, lang)}
-                                  </span>
+                    {/* Child Policy Section */}
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-3">
+                      <div className="flex items-center gap-2 pb-2 border-b border-slate-800 text-amber-500">
+                        <Users className="w-4 h-4 text-amber-500" />
+                        <h4 className="font-extrabold text-xs">
+                          {lang === 'ar' ? 'سياسة الأطفال والأسعار للفندق' : 'Hotel Child Policy & Rates'}
+                        </h4>
+                      </div>
+                      <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-line font-semibold">
+                        {lang === 'ar' 
+                          ? (scheduleHotel.childPolicyAr || 'الأطفال أقل من ٦ سنوات مجاناً في نفس الغرفة مع الوالدين (بحد أقصى طفلين). الأطفال من سن ٦ سنوات إلى ١١.٩٩ سنة يحصلون على خصم ٥٠٪.')
+                          : (scheduleHotel.childPolicyEn || 'Children under 6 stay free of charge using existing bedding. Children 6-12 years receive a 50% discount.')
+                        }
+                      </div>
+                    </div>
 
-                                  {/* Price - small font */}
-                                  <span className="text-[11px] font-black text-amber-400 mt-1 font-mono">
-                                    ${status.price}
-                                  </span>
-
-                                  {/* Status/Inventory - small font */}
-                                  <span className={`text-[8px] font-bold mt-1.5 px-1.5 py-0.5 rounded-md leading-none ${
-                                    status.isBlocked
-                                      ? 'bg-rose-950 text-rose-400 border border-rose-900/40'
-                                      : status.available === 0
-                                      ? 'bg-slate-850 text-slate-550'
-                                      : 'bg-emerald-950 text-emerald-400 border border-emerald-900/30'
-                                  }`}>
-                                    {status.isBlocked 
-                                      ? (lang === 'ar' ? 'مغلق' : 'Blocked') 
-                                      : status.available === 0
-                                      ? (lang === 'ar' ? 'مكتمل' : 'Full')
-                                      : `${status.available} ${lang === 'ar' ? 'متاح' : 'Left'}`}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {/* Transfers Section */}
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-3">
+                      <div className="flex items-center gap-2 pb-2 border-b border-slate-800 text-amber-500">
+                        <Car className="w-4 h-4 text-amber-400" />
+                        <h4 className="font-extrabold text-xs">
+                          {lang === 'ar' ? 'أسعار خدمات النقل والمواصلات المتاحة للفندق' : 'Available Transfer Options & Contracted Rates'}
+                        </h4>
+                      </div>
+                      <div className="space-y-2.5 font-mono text-xs">
+                        {(scheduleHotel.transfers && scheduleHotel.transfers.length > 0 ? scheduleHotel.transfers : [
+                          { id: 'trans-1', fromEn: 'Cairo International Airport (Private Car)', fromAr: 'مطار القاهرة الدولي (سيارة خاصة)', price: 35 },
+                          { id: 'trans-2', fromEn: 'Hurghada Airport (VIP Limousine)', fromAr: 'مطار الغردقة الدولي (سيارة ليموزين)', price: 45 },
+                          { id: 'trans-3', fromEn: 'Sharm El Sheikh Airport (Mini-Van Group)', fromAr: 'مطار شرم الشيخ (حافلة صغيرة للمجموعات)', price: 60 }
+                        ]).map((tr) => {
+                          const trPrice = tr.price !== undefined ? tr.price : ((tr as any).pricePerPerson !== undefined ? (tr as any).pricePerPerson : 0);
+                          return (
+                            <div key={tr.id} className="flex justify-between items-center text-slate-300">
+                              <span className="font-sans text-[11px] font-semibold">{lang === 'ar' ? tr.fromAr : tr.fromEn}</span>
+                              <span className="font-bold text-amber-450 text-[11px] font-mono">{formatPrice(trPrice, lang)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 );
               })()}
@@ -1152,16 +1204,6 @@ export default function App() {
                 className="bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white font-black py-2 px-5 rounded-xl text-xs transition-colors cursor-pointer"
               >
                 {lang === 'ar' ? 'إغلاق' : 'Close'}
-              </button>
-              <button
-                onClick={() => {
-                  const targetId = scheduleHotel.id;
-                  setScheduleHotel(null);
-                  setSelectedHotelId(targetId);
-                }}
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2 px-5 rounded-xl text-xs shadow-md transition-colors cursor-pointer"
-              >
-                {lang === 'ar' ? 'عرض الغرف والطلب الآن' : 'View & Request Booking'}
               </button>
             </div>
 
@@ -1280,82 +1322,308 @@ export default function App() {
 
 interface AdminPasscodeGateProps {
   lang: Language;
-  onVerify: (passcode: string) => void;
+  onLoginSuccess: (user: PortalUser) => void;
   onCancel: () => void;
 }
 
 export function AdminPasscodeGate({
   lang,
-  onVerify,
+  onLoginSuccess,
   onCancel
 }: AdminPasscodeGateProps) {
-  const [passcode, setPasscode] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  // For changing password
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [pendingUser, setPendingUser] = useState<PortalUser | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const isRtl = lang === 'ar';
 
-  const handleSubmit = (e: { preventDefault: () => void }) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onVerify(passcode);
+    setErrorMsg('');
+    setIsLoading(true);
+
+    try {
+      const emailLower = email.toLowerCase().trim();
+      if (!emailLower || !password) {
+        setIsLoading(false);
+        setErrorMsg(isRtl ? 'يرجى ملء جميع الحقول!' : 'Please fill in all fields!');
+        return;
+      }
+
+      // Check fallback / system built-in accounts first for smooth evaluation/administration
+      if (emailLower === 'admin@khatwa.com' && password === 'KhatwaAdmin2026') {
+        const fallbackUser: PortalUser = {
+          id: 'admin@khatwa.com',
+          email: 'admin@khatwa.com',
+          password: 'KhatwaAdmin2026',
+          role: 'admin',
+          createdAt: '2026-07-18'
+        };
+        setIsLoading(false);
+        onLoginSuccess(fallbackUser);
+        return;
+      }
+      if (emailLower === 'supervisor@khatwa.com' && password === 'KhatwaSupervisor2026') {
+        const fallbackUser: PortalUser = {
+          id: 'supervisor@khatwa.com',
+          email: 'supervisor@khatwa.com',
+          password: 'KhatwaSupervisor2026',
+          role: 'manager',
+          createdAt: '2026-07-18'
+        };
+        setIsLoading(false);
+        onLoginSuccess(fallbackUser);
+        return;
+      }
+      if (emailLower === 'employee@khatwa.com' && password === 'KhatwaEmployee2026') {
+        const fallbackUser: PortalUser = {
+          id: 'employee@khatwa.com',
+          email: 'employee@khatwa.com',
+          password: 'KhatwaEmployee2026',
+          role: 'editor',
+          createdAt: '2026-07-18'
+        };
+        setIsLoading(false);
+        onLoginSuccess(fallbackUser);
+        return;
+      }
+
+      const userDoc = await getDoc(doc(db, 'users', emailLower));
+      if (!userDoc.exists()) {
+        setIsLoading(false);
+        setErrorMsg(isRtl ? 'المستخدم غير مسجل بالنظام!' : 'User is not registered!');
+        return;
+      }
+
+      const userData = userDoc.data() as PortalUser;
+      if (userData.password !== password) {
+        setIsLoading(false);
+        setErrorMsg(isRtl ? 'كلمة المرور غير صحيحة!' : 'Incorrect password!');
+        return;
+      }
+
+      if (userData.isTemporaryPassword) {
+        // Force password change!
+        setPendingUser(userData);
+        setIsChangingPassword(true);
+        setIsLoading(false);
+      } else {
+        setIsLoading(false);
+        onLoginSuccess(userData);
+      }
+    } catch (err) {
+      console.error(err);
+      setIsLoading(false);
+      setErrorMsg(isRtl ? 'حدث خطأ في الاتصال بقاعدة البيانات!' : 'Database connection error!');
+    }
+  };
+
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    if (!newPassword || !confirmPassword) {
+      setErrorMsg(isRtl ? 'يرجى ملء جميع حقول كلمة المرور!' : 'Please fill in all password fields!');
+      return;
+    }
+    if (newPassword.length < 4) {
+      setErrorMsg(isRtl ? 'كلمة المرور يجب أن تكون 4 أحرف على الأقل!' : 'Password must be at least 4 characters!');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setErrorMsg(isRtl ? 'كلمتا المرور غير متطابقتين!' : 'Passwords do not match!');
+      return;
+    }
+
+    if (!pendingUser) return;
+    setIsLoading(true);
+
+    try {
+      await updateDoc(doc(db, 'users', pendingUser.id), {
+        password: newPassword,
+        isTemporaryPassword: false
+      });
+
+      const updatedUser: PortalUser = {
+        ...pendingUser,
+        password: newPassword,
+        isTemporaryPassword: false
+      };
+
+      setIsLoading(false);
+      onLoginSuccess(updatedUser);
+    } catch (err) {
+      console.error(err);
+      setIsLoading(false);
+      setErrorMsg(isRtl ? 'فشل تحديث كلمة المرور في قاعدة البيانات!' : 'Failed to update password in database!');
+    }
   };
 
   return (
     <div className="max-w-md mx-auto my-16 px-4 animate-fadeIn" dir={isRtl ? 'rtl' : 'ltr'}>
-      <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-xl text-center relative overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-xl relative overflow-hidden">
         {/* Top bar accent */}
         <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-500 to-amber-600"></div>
 
-        <div className="bg-amber-500 text-slate-950 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-amber-500/20">
-          <LogIn className="w-8 h-8" />
-        </div>
+        {!isChangingPassword ? (
+          <>
+            <div className="bg-amber-500 text-slate-950 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg shadow-amber-500/20">
+              <LogIn className="w-8 h-8" />
+            </div>
 
-        <h3 className="text-2xl font-black text-slate-900 tracking-tight">
-          {isRtl ? 'بوابة المشرف الآمنة' : 'Secure Admin Portal'}
-        </h3>
-        <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-          {isRtl 
-            ? 'الدخول مخصص لمشرفي منصة خطوة B2B فقط لإدارة الفنادق والعقود وحصص الغرف وجدول المواعيد.'
-            : 'Access is restricted to authorized Khatwa B2B administrators to manage contracts, hotel inventories, room pricing, and live schedules.'}
-        </p>
+            <h3 className="text-2xl font-black text-slate-900 tracking-tight text-center">
+              {isRtl ? 'بوابة تسجيل الدخول الآمنة' : 'Secure Login Portal'}
+            </h3>
+            <p className="text-xs text-slate-500 mt-2 leading-relaxed text-center">
+              {isRtl 
+                ? 'الدخول مخصص لمشرفي وموظفي منصة خطوة B2B المعتمدين لإدارة العقود وحصص الغرف وجدول المواعيد.'
+                : 'Access is restricted to authorized Khatwa B2B administrators and staff to manage contracts, hotel inventories, and live schedules.'}
+            </p>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-          <div>
-            <label className="block text-slate-500 text-[10px] uppercase font-mono tracking-wider mb-2 font-bold" style={{ textAlign: isRtl ? 'right' : 'left' }}>
-              {isRtl ? 'رمز مرور الإدارة الفنية' : 'Admin Technical Passcode'}
-            </label>
-            <input
-              type="password"
-              required
-              value={passcode}
-              onChange={(e) => setPasscode(e.target.value)}
-              placeholder="••••••••••••"
-              className="bg-slate-50 border border-slate-200 text-slate-800 text-center font-mono rounded-xl px-4 py-3 text-base focus:outline-none focus:border-amber-500 w-full tracking-widest shadow-inner"
-            />
-          </div>
+            {errorMsg && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs px-4 py-3 rounded-xl mt-4 font-bold text-center">
+                {errorMsg}
+              </div>
+            )}
 
-          <div className="bg-amber-500/10 border border-amber-500/20 p-3.5 rounded-xl text-xs text-amber-900 font-medium">
-            {isRtl 
-              ? 'للتجربة والتقييم، استخدم الرمز الافتراضي: ' 
-              : 'For evaluation, use default passcode: '}
-            <code className="bg-amber-200/50 text-slate-950 font-bold px-1.5 py-0.5 rounded ml-1 select-all font-mono">
-              KhatwaAdmin2026
-            </code>
-          </div>
+            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-slate-500 text-[10px] uppercase font-mono tracking-wider mb-1.5 font-bold" style={{ textAlign: isRtl ? 'right' : 'left' }}>
+                    {isRtl ? 'البريد الإلكتروني لحساب الموظف/المشرف' : 'Staff/Supervisor Email Address'}
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="user@khatwa.com"
+                    className="bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 w-full shadow-inner"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 text-[10px] uppercase font-mono tracking-wider mb-1.5 font-bold" style={{ textAlign: isRtl ? 'right' : 'left' }}>
+                    {isRtl ? 'كلمة المرور' : 'Password'}
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 w-full shadow-inner"
+                  />
+                </div>
+              </div>
 
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="flex-1 border border-slate-200 text-slate-550 hover:bg-slate-50 font-bold py-3 px-4 rounded-xl text-xs transition-colors cursor-pointer"
-            >
-              {isRtl ? 'رجوع للرئيسية' : 'Back to Home'}
-            </button>
-            <button
-              type="submit"
-              className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3 px-4 rounded-xl text-xs transition-colors shadow-md cursor-pointer"
-            >
-              {isRtl ? 'دخول وتحقق' : 'Verify & Enter'}
-            </button>
-          </div>
-        </form>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="flex-1 border border-slate-200 text-slate-550 hover:bg-slate-50 font-bold py-3 px-4 rounded-xl text-xs transition-colors cursor-pointer text-center"
+                >
+                  {isRtl ? 'رجوع للرئيسية' : 'Back to Home'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="flex-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-extrabold py-3 px-4 rounded-xl text-xs transition-colors shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isLoading ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    isRtl ? 'دخول وتحقق' : 'Verify & Enter'
+                  )}
+                </button>
+              </div>
+            </form>
+          </>
+        ) : (
+          /* FORCED CHANGE PASSWORD FORM */
+          <form onSubmit={handleChangePasswordSubmit} className="space-y-5">
+            <div className="bg-amber-500 text-slate-950 w-14 h-14 rounded-2xl flex items-center justify-center mx-auto shadow-md">
+              <ShieldCheck className="w-7 h-7" />
+            </div>
+
+            <div className="text-center">
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                {isRtl ? 'تحديث كلمة المرور المؤقتة' : 'Update Temporary Password'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                {isRtl 
+                  ? 'قام مشرف النظام بتعيين كلمة مرور مؤقتة لحسابك. لحماية خصوصية بياناتك وتأمين حسابك، يجب تعيين كلمة مرور جديدة خاصة بك للمتابعة.'
+                  : 'Your account was set up with a temporary password. To secure your account, you must choose a new private password before logging in.'}
+              </p>
+            </div>
+
+            {errorMsg && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs px-4 py-3 rounded-xl font-bold text-center">
+                {errorMsg}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-slate-500 text-[10px] uppercase font-mono tracking-wider mb-1.5 font-bold" style={{ textAlign: isRtl ? 'right' : 'left' }}>
+                  {isRtl ? 'كلمة المرور الجديدة' : 'New Password'}
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 w-full shadow-inner"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-500 text-[10px] uppercase font-mono tracking-wider mb-1.5 font-bold" style={{ textAlign: isRtl ? 'right' : 'left' }}>
+                  {isRtl ? 'تأكيد كلمة المرور الجديدة' : 'Confirm New Password'}
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 w-full shadow-inner"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsChangingPassword(false);
+                  setPendingUser(null);
+                  setErrorMsg('');
+                }}
+                className="flex-1 border border-slate-200 text-slate-550 hover:bg-slate-50 font-bold py-3 px-4 rounded-xl text-xs transition-colors cursor-pointer text-center"
+              >
+                {isRtl ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 px-4 rounded-xl text-xs transition-colors shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                {isLoading ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  isRtl ? 'تحديث كلمة المرور والدخول' : 'Update & Login'
+                )}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
